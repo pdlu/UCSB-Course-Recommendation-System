@@ -20,6 +20,7 @@ Using the UCSB Academic Curriculum API, we collect real-time course data. To sim
 ## Methodology
 
 ### Data Processing
+
 -   Utilized with UCSB Academic Curriculum v3.0 API to gather real-time and relevant UCSB course information.
 -   Collected anonymized student dataset from Kaggle (Students Extracurricular Info Dataset).
 -   Conducted exploratory data analysis (EDA) on student extracurricular and course data to identify missing values and better understand the structure and content of the datasets.
@@ -58,4 +59,4 @@ Using the UCSB Academic Curriculum API, we collect real-time course data. To sim
 
 Created by Phuc Lu - feel free to reach out!
 
-[www.linkedin.com/in/phuclu](www.linkedin.com/in/phuclu)
+[Linkedin](www.linkedin.com/in/phuclu)
