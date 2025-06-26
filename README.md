@@ -59,4 +59,4 @@ Using the UCSB Academic Curriculum API, we collect real-time course data. To sim
 
 Created by Phuc Lu - feel free to reach out!
 
-[Linkedin](www.linkedin.com/in/phuclu)
+[Linkedin](https://www.linkedin.com/in/phuclu)
