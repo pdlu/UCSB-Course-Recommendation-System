@@ -1,1 +1,1 @@
-# UCSB-Course-Recommendation-System
+# PSTAT-134-Course-Recommendation-Project

@@ -1,0 +1,408 @@
+---
+title: "PSTAT 134: UCSB Course Recommendation System"
+author: Phuc Lu, Jiaxin Su, Yuchen Zhu, Calder Glass
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-location: left
+    toc-depth: 4
+    embed-resources: true
+    theme: simplex
+    code-fold: show
+editor: visual
+execute:
+  warning: false
+  message: false
+---
+
+![](./UCSB-Default-image-FB.jpg)
+
+## Abstract
+
+Since UCSB doesn't have a course recommendation system for its students to find interesting classes, this project aims to build one. Two data sets were used to in the recommendation system. A collection of UCSB courses and its relevant information was created using the Academic Curriculum v3.0 offered by UCSB. Due to limited access to real student data, an anonymized student extracurricular activities data set from Kaggle was used instead. Content-based filtering and the similarity algorithm BM25 was used to give 5 UCSB course recommendations to each student in the data set. The recommendations were reasonable, given the information given the student data input into the system.
+
+## Introduction
+
+Besides being a research institution, UCSB also offers its students a liberal arts education through a wide variety to interesting courses in different subject areas. Especially with the holistic admission process, bringing in well-rounded individuals with many different interests. However, once they've been admitted, students are then left to rely on academic advising, hear the words of mouth from their peers, Reddit, or randomly scouring through GOLD minutes before their course registration past time to find interesting courses outside of their major. In other words, there isn't a way for students to get tailored list of courses that match their interests here at UCSB. For this project, our goal is to expedite the course searching process by creating a course recommendation system that recommend UCSB courses to students based on their interests.
+
+We’ll be working with two separate data sets. The first data set contains information about all courses offered at UCSB and the second data set will be about students’ and their extracurricular activities. For UCSB courses information, we plan on using an API. Once we’ve gathered this data, we’ll store it in a file and use it build our recommendation system. As for the students' data set, since we cannot go around surveying all 20,000+ students at UCSB or gather their data without infringing upon [FERPA](https://studentprivacy.ed.gov/ferpa), we’ll be using data from [“Students Extracurricular Info”](https://www.kaggle.com/datasets/kamakshilahoti/student-extracurriculars-info), obtained via Kaggle.
+
+## Data
+
+### API & Course Data
+
+To get information about courses at UCSB, the [Academic Curriculum v3.0](https://developer.ucsb.edu/content/academic-curriculums#/Classes/Classes_GetClassesAsync) API was used. For the API to work, it required the following input:
+
+-   the base URL,
+-   subject code,
+-   the academic quarter,
+-   page number, page size, and
+-   whether to include class sections.
+
+First of all, the API is hosted by the [developer.ucsb.edu](https://developer.ucsb.edu/apis) website, and they offered UCSB students a unique key upon logging in. Each member of the team obtained a unique API key but only one key is necessary to access the data.
+
+GOLD was used as a reference to gather the unique subject code strings and stored inside a vector called “subject_code”. This information when put into the URL during an API call allows for gathering all possible courses at UCSB.
+
+```{r, message = FALSE}
+library(jsonlite)
+library(httr)
+library(tidyverse)
+library(tidytext)
+library(wordcloud)
+library(ggplot2)
+library(scales)
+```
+
+```{r}
+# Phuc's API Key, Do not share.
+key <- "Bm8u0AWub5xqNoyxirCPZ1AaS5VADlqK"
+
+subject_code <- c("AEP", "ANTH", "ARAB", "ART", "ARTHI", "ARTST", "AS AM", "ASTRO", "BMB", "BIOE", "BIOL", "BMSE", "BL ST", "BOT", "NUC E", "CH E", "CHEM", "CH ST", "CHIN", "CLASS", "COLLO", "COMM", "C LIT", "CMPSC", "CPSCI", "GCMPS", "CMPTG", "CNCSP", "DANCE", "DA", "DUTCH", "DYNS", "EARTH", "EACS", "AFRIC", "AMH", "YORUB", "EEMB", "ECON", "ED", "EAC", "ECE", "EE", "ENGR", "ENGL", "EDS", "ESM", "ENV S", "ERG", "ERGPE", "HLTH", "ESS", "ES", "FEMST", "FAMST", "FLMST", "FR", "GENED", "GEN S", "GEOG", "GEOL", "GLPHY", "GER", "GPS", "GLOBL", "GRAD", "GREEK", "HED", "HEB", "AS ST", "HIST", "HEC", "I A", "IQB", "INT", "INEST", "ITAL", "JAPAN", "KOR", "LATIN", "LAIS", "LAWSO", "LING", "LIT", "MARSC", "MARIN", "MATRL", "MATH", "ME", "MAT", "ME ST", "MES", "MS", "MCDB", "MUS", "MUS A", "NAT S", "ELANG", "PHIL", "PHYS", "POLS", "PORT", "PSY", "RGST", "RENST", "RUSS", "SLAV", "SOC", "SPAN", "SHS", "PSTAT", "TEMP", "THTR", "WRIT", "W&L", "ZOOL")
+
+## some subject codes has spaces in it like "AS AM", in the url, the space is replaced with "%20"
+subject_code <- gsub(" ", "%20", subject_code)
+```
+
+It was found that some courses had a space such as “AS AM”. The API didn’t accept this kind of representation. Hence, the subject codes with the space needed to be replaced by a special encoding "%20".
+
+The courses from fall 2024 was selected over other quarters for its most recent version of courses. In addition, the intention was to tailor the recommendation system a bit toward new incoming students who might want some recommendations for their first UCSB courses. It was also found that the fall quarter at UCSB usually has more courses than any other quarter. In short, fall 2024 chosen because it was the most recent quarter, higher amount of courses, and to tailor the recommendation system a bit toward new students. There is a quirk with how the API wants its users to format the quarter input. When it says "YYYYQ", it actually wants the four digit of the year. However, the "Q" is actually a number {1, 2, 3, 4}. How the numbering system works is based on how UCSB define the quarter and its quarters. For example, during the 2024-2025 school year, although the fall quarter is Fall 2024, the winter and spring quarters are actually written with following year, which is 2025. Hence, for winter quarter, Q = 1, spring quarter Q = 2, summer quarter Q = 3, and fall quarter Q = 4.
+
+The page number and page size were chosen so that it would maximize the amount of courses that the API could gather per subject code. The URL included whether to include class sections. When true, the API would also gather section information from each courses. However, this feature was not used later in the project.
+
+```{r}
+# initiating a container to store different urls for courses.
+url_container <- NULL
+
+# the chosen quarter for the course data.
+quarter <- 20244
+
+# Creates a container with api url to all courses in subject code.
+for (i in subject_code){
+  url <- paste0("https://api.ucsb.edu/academics/curriculums/v3/classes/search?quarter=", quarter, "&subjectCode=", i, "&pageNumber=1&pageSize=500&includeClassSections=true")
+
+  url_container <- append(url_container, url)
+}
+```
+
+A for loop was used to iterate through the subject_code container and upon each API call, the following information is to be collected:
+
+-   the quarter,
+-   course identification code,
+-   the title,
+-   the department code,
+-   the course description,
+-   the subject area,
+-   whether the course is a lower, upper division or graduate
+    -   (where G = Graduate, U = under graduate, L = undergrad, lower division, S = undergrad, upper division)
+-   which of the three UCSB colleges the course belongs to
+    -   (L&S = College of Letters and Science, ENGR = College of Engineering, Gervirtz School of Education, ESM = Bren School of Environmental Science & Management),
+-   the number of units that it offers,
+-   the instruction type
+    -   (LEC = Lecture, TUT = Tutorial, SEM = Seminar, FLD = Field Work, STD = Studio, LAB = Laboratory, DIS = Discussion, COL = Colloquia), and
+-   whether the course is online (TRUE or FALSE).
+
+The information about each courses' section were omitted due to complications with how UCSB stores that information with varying column lengths, R didn't like it and won't work. It was decided that the information gained would not add much to the recommendation system and thus it was not worth the trouble.
+
+After the course data frame has been generated, it is exported as a `.csv` file to be used in the recommendation system.
+
+```{r, eval = FALSE}
+### JSON FILE PROCESSING
+courses_df <- NULL
+
+course_container <- NULL
+  
+for (i in 1:length(subject_code)){
+  request = GET(url_container[i], add_headers(`ucsb-api-key` = key))
+  response_content = content(request, as = "text", encoding = "UTF-8")
+  data = response_content %>% fromJSON()
+  course_container = append(course_container, data)
+  # data contain the classes in each of the subjects
+  
+  courses_df[[i]] = data.frame(
+    quarter = data$classes$quarter,
+    courseId = data$classes$courseId,
+    title = data$classes$title,
+    dept_code = data$classes$deptCode,
+    description = data$classes$description,
+    subject_area = data$classes$subjectArea,
+
+    obj_level = data$classes$objLevelCode,
+    college = data$classes$college,
+    units = data$classes$unitsFixed,
+    instruction_type1 = data$classes$instructionType,
+    online_course = data$classes$onLineCourse
+    )
+    file_name <- paste0(subject_code[i],".csv")
+  }
+    
+courses_df <- do.call(rbind, courses_df)
+
+# Write the csv file for recommendation system
+# write_csv(courses_df, path = "./data/Fall2024_Courses.csv")
+```
+
+```{r}
+courses_df <- read_csv("./Fall2024_Courses.csv", show_col_types = FALSE)
+```
+
+#### Word Cloud for Courses Data
+
+A bit of data exploratory analysis is done for the course data. In the quarter of fall 2024, there are a total of 2261 courses offered at UCSB.
+
+```{r}
+remove <- c('\n', 
+            '[[:punct:]]', 
+            'nbsp', 
+            '[[:digit:]]', 
+            '[[:symbol:]]',
+            '^br$',
+            'href',
+            'ilink') %>%
+  paste(collapse = '|')
+
+courses_df$description <- courses_df$description %>% 
+  str_remove_all('\'') %>%
+  str_replace_all(remove, ' ') %>%
+  str_replace_all("([a-z])([A-Z])", "\\1 \\2") %>%
+  tolower() %>%
+  str_replace_all("â|ï|ð|ÿ|œ|ž|š|^", " ") %>% 
+  str_replace_all("\\s+", " ") %>% 
+  str_trim()
+
+courses_df <- courses_df %>%
+  filter(!is.na(description)) %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words) %>%
+  count(word, sort = T)
+
+```
+
+```{r, warning=FALSE, fig.cap = "This is a word cloud of the most commonly-occurring words overall in the course description. Based on the graph below, the most frequently occurred words are students, research, and topics."}
+set.seed(1234)  # For reproducibility
+wordcloud(words = courses_df$word, 
+          freq = courses_df$n, 
+          min.freq = 2,  # Adjust minimum frequency 
+          max.words = 100, 
+          random.order = FALSE, 
+          colors = brewer.pal(8, "Dark2"))
+```
+
+### Exploratory Data Analysis for Students Data
+
+Here are some overview of this student data set.
+
+```{r}
+student <- read.csv("./student_data_extended.csv")
+```
+
+What’s great about the Students Extracurricular dataset is that it includes information from 1,000 anonymized students. Additionally, it contains all the relevant information we believe is necessary to collect from students to make informed recommendations for UCSB courses. It consists of 12 columns, including student ID, name, academic interest, extracurricular activities, skills, location, year of study, major, GPA, languages, club memberships, and research interests.
+
+```{r}
+colnames(student)
+nrow(student)
+```
+
+The codebook of student data set is down below:
+
+`StudentID`: A unique identifier for each student.\
+`Name`: The name of the student.\
+`AcademicInterest`: The field of study or academic interest of the student.\
+`ExtracurricularActivities`: Extracurricular activities the student is involved in.\
+`Skills`: Skills possessed by the student.\
+`Location`: The city or location where the student is currently based.\
+`YearOfStudy`: The year of study for the student (e.g., Freshman, Junior, Senior, Graduate).\
+`Major`: The major or field of study that the student is pursuing.\
+`GPA`: The Grade Point Average of the student.\
+`Languages`: Languages spoken or known by the student.\
+`ClubMemberships`: Memberships in various clubs or organizations.\
+`ResearchInterests`: Research interests or specialization of the student.
+
+Here are the first two rows of the student data set. This data set is exceptionally clean, as it contains no missing values. However, the skills, languages, and club memberships columns contain multiple pieces of information within a single column. For example, the second row in the skills column includes multiple skills for that student, such as leadership, problem-solving, and more. To enhance the visualization of this data set, we use one-hot encoding to reorganize the skills, languages, and club memberships into separate columns for each skill type, spoken language, and club participation.
+
+```{r}
+any(is.na(student))
+student %>% head(n = 2)
+```
+
+Here is how we implement one hot encoding to our student data set. In the one hot encoded data set, "1" represents the student has the skill, or speak the language, or participates this club.
+
+```{r}
+cleaned_data <- student %>%
+  separate_rows(ClubMemberships, sep = ", ") %>%  # Split club names into separate rows
+  
+  mutate(ClubMemberships = trimws(ClubMemberships)) # Remove extra spaces
+
+one_hot_encoded <- cleaned_data %>%
+  mutate(value = 1) %>%  # Add a column to indicate membership presence
+  pivot_wider(names_from = ClubMemberships, values_from = value, values_fill = list(value = 0)) # One-hot encode, create a column for each club
+# list(value = 0) fills missing values with 0
+
+
+cleaned_data <- one_hot_encoded %>%
+  separate_rows(Skills, sep = ", ") %>%  # Split club names into separate rows
+  
+  mutate(Skills = trimws(Skills)) # Remove extra spaces
+
+one_hot_encoded <- cleaned_data %>%
+  mutate(value = 1) %>%  # Add a column to indicate membership presence
+  pivot_wider(names_from = Skills, values_from = value, values_fill = list(value = 0)) # One-hot encode, create a column for each club
+# list(value = 0) fills missing values with 0
+
+
+cleaned_data <- one_hot_encoded %>%
+  separate_rows(Languages, sep = ", ") %>%  # Split club names into separate rows
+  
+  mutate(Languages = trimws(Languages)) # Remove extra spaces
+
+one_hot_encoded <- cleaned_data %>%
+  mutate(value = 1) %>%  # Add a column to indicate membership presence
+  pivot_wider(names_from = Languages, values_from = value, values_fill = list(value = 0)) # One-hot encode, create a column for each club
+# list(value = 0) fills missing values with 0
+
+# Function to clean column names
+clean_colnames <- function(df) {
+  colnames(df) <- colnames(df) %>%
+    str_replace_all(" ", "") %>%   # Remove spaces
+    str_replace_all("_", "") %>%   # Remove underscores (if any)
+    str_replace_all("[^[:alnum:]]", "")  # Remove any non-alphanumeric characters
+  return(df)
+}
+
+one_hot_encoded <- clean_colnames(one_hot_encoded)
+colnames(one_hot_encoded)
+one_hot_encoded[,10:17] %>% head(n = 1)
+```
+
+#### Academic Interst
+
+```{r, fig.cap = "The students' academic interest includes biology, computer science, history, mathematics, physics, and psychology. Based on the bar chart below, the number of students interested in each area is roughly the same, with a slightly higher interest in research in history."}
+student <- read.csv("./student_data_extended.csv")
+ggplot(data = student, aes(x = fct_infreq(AcademicInterest))) +
+    geom_bar(fill = "steelblue") +
+    labs(title = "Academic Interst Distribution", x = "Academic Intrest", y = "Count") +  theme_minimal()
+```
+
+#### Student Major
+
+```{r, fig.cap = "The bar chart displays the distribution of students across different academic majors, with Mathematics having the highest count and Physics the lowest. The distribution appears relatively balanced, with all majors having a similar number of students."}
+ggplot(data = student, aes(x = fct_infreq(Major))) +
+    geom_bar(fill = "steelblue") +
+    labs(title = "Major Distribution", x = "Major", y = "Count")
+```
+
+#### Research Interest
+
+```{r, fig.cap = "The bar chart represents the distribution of research interests, with Climate Change having the highest count among the listed topics. Other prominent interests include Environmental Sustainability, Human-Computer Interaction, and Machine Learning, while fields like Artificial Intelligence, Bioinformatics, and Natural Language Processing have lower counts. This suggests that sustainability and emerging technology fields attract significant attention, whereas some specialized topics have comparatively fewer researchers."}
+ggplot(data = student, aes(x = fct_infreq(ResearchInterests))) +
+    geom_bar(fill = "steelblue") + theme_minimal() +
+    theme(axis.text.x = element_text(angle = 55, hjust = 1)) +
+    labs(title = "Research Interst Distribution", x = "Research Intrest", y = "Count") + theme(panel.grid = element_blank()) 
+
+```
+
+#### Student Language
+
+```{r, fig.cap = "The bar chart represents the distribution of languages spoken or known by students, with German being the most commonly known at 17.8% and French the least at 15.7%. The percentages for Spanish, English, Japanese, and Chinese are relatively close, indicating that students have a diverse but balanced knowledge of multiple languages. This suggests no single language is overwhelmingly dominant."}
+
+language_counts_df <- one_hot_encoded %>%
+  summarise(across(c(Chinese,Japanese,Spanish,German,French,English), sum)) %>%
+  pivot_longer(cols = everything(), names_to = "Language", values_to = "Count")
+
+total_count_language <- sum(language_counts_df$Count)
+
+
+ggplot(language_counts_df, aes(x = reorder(Language, -Count), y = Count / total_count_language)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", (Count / total_count_language) * 100)), vjust = -0.5, size = 4) +
+  labs(title = "Student Language Distribution", x = "Language", y = NULL) +  # Remove y-axis label
+  scale_y_continuous(labels = NULL, limits = c(0, max(language_counts_df$Count / total_count_language) * 1.1)) +  # Hide y-axis scale
+  theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_blank(),  # Remove y-axis text
+        axis.ticks.y = element_blank(),  # Remove y-axis ticks
+        axis.title.y = element_blank(),  # Remove y-axis title
+        panel.grid = element_blank()) 
+        
+
+```
+
+#### Club Membership
+
+```{r, fig.cap= "The bar chart illustrates the distribution of club memberships among students, with participation percentages being fairly similar across all clubs. Sports Team and Music Club have the highest membership rates, while Coding Club has the lowest. This suggests that students are engaged in a diverse range of extracurricular activities, with no single club significantly outpacing the others in popularity."}
+
+club_counts_df <- one_hot_encoded %>%
+  summarise(across(c(MusicClub, ArtClub, SportsTeam, DebateClub, 
+                     CodingClub, VolunteerGroup), sum)) %>%
+  pivot_longer(cols = everything(), names_to = "Club", values_to = "Count")
+
+total_count_club <- sum(club_counts_df$Count)
+
+# Plot club membership distribution
+ggplot(club_counts_df, aes(x = reorder(Club, -Count), y = Count/total_count_club)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Club Membership Distribution", x = "Club", y = "percentage") +
+  theme_minimal(base_size = 10)+
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.20))
+```
+
+#### Student Skills
+
+```{r, fig.cap = "The bar chart represents the distribution of skills among students, with Data Analysis and Programming being the most commonly reported skills. The percentages for Artistic, Leadership, Problem-Solving, and Public Speaking skills are slightly lower but remain relatively balanced. This suggests that students possess a diverse range of skills, with technical and creative abilities being fairly evenly distributed."}
+skills_counts_df <- one_hot_encoded %>%
+  summarise(across(c(ProblemSolving, Leadership, 
+                     PublicSpeaking, DataAnalysis, Programming, Artistic), sum)) %>%
+  pivot_longer(cols = everything(), names_to = "Skills", values_to = "Count")
+
+total_count_skills <- sum(skills_counts_df$Count)
+
+ggplot(skills_counts_df, aes(x = reorder(Skills, -Count), y = Count/total_count_skills)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Students' Skill Distribution", x = "Skills", y = "Percentage") +
+  scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 0.20)) +
+  theme_minimal(base_size = 10)  
+```
+
+## Methodology & Results
+
+<iframe src="final version recomender--bm25.html" width="150%" height="600px">
+
+</iframe>
+
+<!-- ChatGPT Promp: how to show a portion of another html file in one html file in r QMD  -->
+
+## Discussion
+
+One of the fundamental weaknesses with the recommendation system is that it’s difficult to recommend more niche courses to students because keywords in the UCSB course have a 0 percent chance of appearing in the student data set. This is simply due to the data collection process of the student data set. For example, if a student has a special interest in Bayesian Statistics, the student data set would only capture the fact that the student is interested in statistics. This makes generating a list of courses to meet the student’s precise interest more difficult.
+
+If there was a way to get more information about the students, a good starting point would be learning about the students’ previous courses. In this way, the recommendation system would be able to pick up some niche languages that might show up in the previous course document. Another benefit would be not to recommend courses with topics that students have already learned previously. For example, if a student has taken Integral Calculus, then the recommendation wouldn’t recommend Math 3B. A third benefit is that knowing the students’ previous course work might enable the recommendation system to learn more about the student’s to improve course recommendations. Suppose the same student is a math major, but they’ve been in band since middle school. There is a high chance that they’d be interested in learning about UCSB’s Wind Ensemble under MUS A 34, 134, 234 or the Chamber Orchestra MUS A 42, A 142, A 242. Some might say the student can look for themselves once they come to UCSB. While this is true, the whole point of developing the recommendation system is to make the search process easier and faster for students.
+
+Learning this much information about the student would be dancing between the dangerously thin lines of a [FERPA](https://studentprivacy.ed.gov/ferpa) violation. Hence, when it comes to learning about the student’s previous course work, the recommendation system would most likely ask the student to input the coursework and relevant information themselves or with special permission, look at their transcripts. A natural language processing method would also be in place to process the students’ inputs and learn about them. However, after the recommendation system has helped the student, it would not be allowed to retain the students’ data. All data used would be deleted to uphold the standards for data ethics. These are just one of the many aspects that can be improved, there is still a lot of room for the recommendation system to improve.
+
+### Pre-trained Models & LLM Integration
+
+1.  **Embeddings**\
+    A key improvement is adopting **OpenAI embeddings** (for instance, `text-embedding-ada-002`), which convert both student profiles and course descriptions into dense vector representations. This helps the system capture deeper thematic connections – for example, linking a broad topic like “data science” to specialized subfields such as Bayesian methods, advanced regression, or big-data frameworks. By comparing these embedding vectors via similarity metrics (e.g., cosine), the recommendation engine can identify courses that are **conceptually** relevant, even if the student’s exact keywords do not appear in the course text.
+
+2.  **LLM for In-Depth Meaning**\
+    Large Language Models (LLMs) like **GPT-4** can provide a more **context-aware** analysis of the student’s stated interests. For example, if the student inputs “I’m focusing on data science projects, especially around Bayesian statistics,” GPT-4 could parse “Bayesian statistics” and **suggest synonyms or related subtopics** in the data science domain (e.g., Markov Chain Monte Carlo, predictive modeling). This level of **semantic enrichment** helps align a student’s nuanced interests with relevant courses, bridging potential gaps in the existing keywords or embedding-based matches.
+
+3.  **Hybrid Pipeline**\
+    After a **preliminary ranking** (using BM25 or embedding-based similarity) to narrow down potential matches, we can push the top 30 or so **courses**, along with the **student’s data**, to GPT-4 through its API. GPT-4 would then **evaluate** and **rank** these courses, recommending a final set of five it deems **most relevant**. By combining traditional retrieval (BM25, embeddings) with LLM-based **re-ranking**, we achieve a more comprehensive recommendation pipeline: the embeddings efficiently filter a large course pool, while GPT-4’s high-level reasoning refines the final set, ensuring the chosen courses match both broad and specific student interests.
+
+## Conclusion
+
+In order to tackle the challenge of recommending UCSB courses to incoming and prospective students, the team built a recommendation system that utilized the BM25 algorithm. The system achieved decent similarity scores between courses and student data, but issues such as a lack of prior student course history, specific majors and interests hindered the potential for better recommendations. It is worth further inquiry as to whether or not better performance could be extracted by applying a pre-trained embedding model to better capture the semantics of course descriptions. In addition, the use of more advanced forms of natural language processing on students’ interests could’ve also improved course recommendations. Despite some of the project’s shortcomings, there were valuable lessons in figuring out how to extract course data from the UCSB API and determining which type of recommendation system best suited the course to student relationship.
+
+## References
+
+[Academic Curriculum v3.0 API](https://developer.ucsb.edu/content/academic-curriculums#/Classes/Classes_GetClassesAsync)
+
+[“Students Extracurricular Info” Data Set](https://www.kaggle.com/datasets/kamakshilahoti/student-extracurriculars-info)
+
+[Instruction Type Code CodeBook](https://senate.ucsb.edu/courses/definitions/tie-definitions.pdf)
+
+[UCSB Admissions](https://admissions.sa.ucsb.edu/freshman-eligibility-selection)
+
+[UCSB Undergraduate Academic Page](https://www.ucsb.edu/academics/undergraduate)
+
+[FERPA](https://studentprivacy.ed.gov/ferpa)
