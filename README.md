@@ -35,7 +35,7 @@ Using the UCSB Academic Curriculum API, we collect real-time course data. To sim
 
 3.  document length normalization which gives a more consistent results than TF-IDF,
 
-4.  robustness to varying text lengths, particularly for matching short queries (student interests) to richer documents (course descriptions).\
+4.  robustness to varying text lengths, particularly for matching short queries (student interests) to richer documents (course descriptions).
 
 ## Result/Discussion
 
@@ -58,4 +58,4 @@ Using the UCSB Academic Curriculum API, we collect real-time course data. To sim
 
 Created by Phuc Lu - feel free to reach out!
 
-[www.linkedin.com/in/phuclu]()
+[www.linkedin.com/in/phuclu](www.linkedin.com/in/phuclu)
