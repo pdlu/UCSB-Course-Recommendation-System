@@ -56,7 +56,7 @@ library(scales)
 
 ```{r}
 # Phuc's API Key, Do not share.
-key <- "Bm8u0AWub5xqNoyxirCPZ1AaS5VADlqK"
+key <- "**********************"
 
 subject_code <- c("AEP", "ANTH", "ARAB", "ART", "ARTHI", "ARTST", "AS AM", "ASTRO", "BMB", "BIOE", "BIOL", "BMSE", "BL ST", "BOT", "NUC E", "CH E", "CHEM", "CH ST", "CHIN", "CLASS", "COLLO", "COMM", "C LIT", "CMPSC", "CPSCI", "GCMPS", "CMPTG", "CNCSP", "DANCE", "DA", "DUTCH", "DYNS", "EARTH", "EACS", "AFRIC", "AMH", "YORUB", "EEMB", "ECON", "ED", "EAC", "ECE", "EE", "ENGR", "ENGL", "EDS", "ESM", "ENV S", "ERG", "ERGPE", "HLTH", "ESS", "ES", "FEMST", "FAMST", "FLMST", "FR", "GENED", "GEN S", "GEOG", "GEOL", "GLPHY", "GER", "GPS", "GLOBL", "GRAD", "GREEK", "HED", "HEB", "AS ST", "HIST", "HEC", "I A", "IQB", "INT", "INEST", "ITAL", "JAPAN", "KOR", "LATIN", "LAIS", "LAWSO", "LING", "LIT", "MARSC", "MARIN", "MATRL", "MATH", "ME", "MAT", "ME ST", "MES", "MS", "MCDB", "MUS", "MUS A", "NAT S", "ELANG", "PHIL", "PHYS", "POLS", "PORT", "PSY", "RGST", "RENST", "RUSS", "SLAV", "SOC", "SPAN", "SHS", "PSTAT", "TEMP", "THTR", "WRIT", "W&L", "ZOOL")
 
